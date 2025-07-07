@@ -1,129 +1,295 @@
-# Readability.js
+# Readability for Rust
 
-A standalone version of the readability library used for [Firefox Reader View](https://support.mozilla.org/kb/firefox-reader-view-clutter-free-web-pages).
+A Rust port of [Mozilla's Readability library](https://github.com/mozilla/readability) for extracting article content from web pages. This library removes clutter like ads, navigation, and sidebars to extract the main content, making it perfect for reader mode implementations, content archiving, and text analysis.
+
+## Features
+
+- **Content Extraction**: Automatically identifies and extracts the main article content from web pages
+- **Cleanup**: Removes ads, navigation menus, sidebars, and other non-content elements
+- **Metadata Extraction**: Extracts title, author, published date, and other article metadata
+- **Multiple Output Formats**: Support for JSON, plain text, and clean HTML output
+- **CLI Tool**: Command-line interface for batch processing and shell scripting
+- **Readability Check**: Quick assessment of whether a document is suitable for content extraction
+- **Rust Performance**: Native Rust implementation for speed and memory safety
 
 ## Installation
 
-Readability is available on npm:
+### As a Library
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+readability = "0.1.0"
+```
+
+### CLI Tool
+
+Install the command-line tool:
 
 ```bash
-npm install @mozilla/readability
+cargo install readability
 ```
 
-You can then `require()` it, or for web-based projects, load the `Readability.js` script from your webpage.
+Or build from source:
 
-## Basic usage
-
-To parse a document, you must create a new `Readability` object from a DOM document object, and then call the [`parse()`](#parse) method. Here's an example:
-
-```javascript
-var article = new Readability(document).parse();
+```bash
+git clone https://github.com/mozilla/readability-rust
+cd readability-rust
+cargo build --release
+./target/release/readability --help
 ```
 
-If you use Readability in a web browser, you will likely be able to use a `document` reference from elsewhere (e.g. fetched via XMLHttpRequest, in a same-origin `<iframe>` you have access to, etc.). In Node.js, you can [use an external DOM library](#nodejs-usage).
+## Library Usage
 
-## API Reference
+### Basic Example
 
-### `new Readability(document, options)`
+```rust
+use readability::{Readability, ReadabilityOptions};
 
-The `options` object accepts a number of properties, all optional:
+let html = r#"
+<html>
+  <head><title>Example Article</title></head>
+  <body>
+    <nav>Navigation menu...</nav>
+    <article>
+      <h1>Main Article Title</h1>
+      <p>This is the main content of the article that should be extracted.</p>
+      <p>More content here...</p>
+    </article>
+    <aside>Sidebar content that should be removed.</aside>
+  </body>
+</html>
+"#;
 
-* `debug` (boolean, default `false`): whether to enable logging.
-* `maxElemsToParse` (number, default `0` i.e. no limit): the maximum number of elements to parse.
-* `nbTopCandidates` (number, default `5`): the number of top candidates to consider when analysing how tight the competition is among candidates.
-* `charThreshold` (number, default `500`): the number of characters an article must have in order to return a result.
-* `classesToPreserve` (array): a set of classes to preserve on HTML elements when the `keepClasses` options is set to `false`.
-* `keepClasses` (boolean, default `false`): whether to preserve all classes on HTML elements. When set to `false` only classes specified in the `classesToPreserve` array are kept.
-* `disableJSONLD` (boolean, default `false`): when extracting page metadata, Readability gives precedence to Schema.org fields specified in the JSON-LD format. Set this option to `true` to skip JSON-LD parsing.
-* `serializer` (function, default `el => el.innerHTML`) controls how the `content` property returned by the `parse()` method is produced from the root DOM element. It may be useful to specify the `serializer` as the identity function (`el => el`) to obtain a DOM element instead of a string for `content` if you plan to process it further.
-* `allowedVideoRegex` (RegExp, default `undefined` ): a regular expression that matches video URLs that should be allowed to be included in the article content. If `undefined`, the [default regex](https://github.com/mozilla/readability/blob/8e8ec27cd2013940bc6f3cc609de10e35a1d9d86/Readability.js#L133) is applied.
-* `linkDensityModifier` (number, default `0`): a number that is added to the base link density threshold during the shadiness checks. This can be used to penalize nodes with a high link density or vice versa.
-
-### `parse()`
-
-Returns an object containing the following properties:
-
-* `title`: article title;
-* `content`: HTML string of processed article content;
-* `textContent`: text content of the article, with all the HTML tags removed;
-* `length`: length of an article, in characters;
-* `excerpt`: article description, or short excerpt from the content;
-* `byline`: author metadata;
-* `dir`: content direction;
-* `siteName`: name of the site;
-* `lang`: content language;
-* `publishedTime`: published time;
-
-The `parse()` method works by modifying the DOM. This removes some elements in the web page, which may be undesirable. You can avoid this by passing the clone of the `document` object to the `Readability` constructor:
-
-```js
-var documentClone = document.cloneNode(true);
-var article = new Readability(documentClone).parse();
-```
-
-### `isProbablyReaderable(document, options)`
-
-A quick-and-dirty way of figuring out if it's plausible that the contents of a given document are suitable for processing with Readability. It is likely to produce both false positives and false negatives. The reason it exists is to avoid bogging down a time-sensitive process (like loading and showing the user a webpage) with the complex logic in the core of Readability. Improvements to its logic (while not deteriorating its performance) are very welcome.
-
-The `options` object accepts a number of properties, all optional:
-
-* `minContentLength` (number, default `140`): the minimum node content length used to decide if the document is readerable;
-* `minScore` (number, default `20`): the minimum cumulated 'score' used to determine if the document is readerable;
-* `visibilityChecker` (function, default `isNodeVisible`): the function used to determine if a node is visible;
-
-The function returns a boolean corresponding to whether or not we suspect `Readability.parse()` will succeed at returning an article object. Here's an example:
-
-```js
-/*
-    Only instantiate Readability  if we suspect
-    the `parse()` method will produce a meaningful result.
-*/
-if (isProbablyReaderable(document)) {
-    let article = new Readability(document).parse();
+let mut readability = Readability::new(html, None).unwrap();
+if let Some(article) = readability.parse() {
+    println!("Title: {}", article.title.unwrap_or_default());
+    println!("Content: {}", article.content.unwrap_or_default());
+    println!("Text: {}", article.text_content.unwrap_or_default());
+    println!("Length: {} characters", article.length.unwrap_or(0));
 }
 ```
 
-## Node.js usage
+### With Custom Options
 
-Since Node.js does not come with its own DOM implementation, we rely on external libraries like [jsdom](https://github.com/jsdom/jsdom). Here's an example using `jsdom` to obtain a DOM document object:
+```rust
+use readability::{Readability, ReadabilityOptions};
 
-```js
-var { Readability } = require('@mozilla/readability');
-var { JSDOM } = require('jsdom');
-var doc = new JSDOM("<body>Look at this cat: <img src='./cat.jpg'></body>", {
-  url: "https://www.example.com/the-page-i-got-the-source-from"
-});
-let reader = new Readability(doc.window.document);
-let article = reader.parse();
+let options = ReadabilityOptions {
+    debug: true,
+    char_threshold: 300,
+    keep_classes: true,
+    ..Default::default()
+};
+
+let mut readability = Readability::new(html, Some(options)).unwrap();
+let article = readability.parse().expect("Failed to parse article");
 ```
 
-Remember to pass the page's URI as the `url` option in the `JSDOM` constructor (as shown in the example above), so that Readability can convert relative URLs for images, hyperlinks, etc. to their absolute counterparts.
+### With Base URI
 
-`jsdom` has the ability to run the scripts included in the HTML and fetch remote resources. For security reasons these are [disabled by default](https://github.com/jsdom/jsdom#executing-scripts), and we **strongly** recommend you keep them that way.
+```rust
+use readability::Readability;
 
-## Security
+let base_uri = "https://example.com/articles/";
+let mut readability = Readability::new_with_base_uri(html, base_uri, None).unwrap();
+let article = readability.parse().unwrap();
+```
 
-If you're going to use Readability with untrusted input (whether in HTML or DOM form), we **strongly** recommend you use a sanitizer library like [DOMPurify](https://github.com/cure53/DOMPurify) to avoid script injection when you use
-the output of Readability. We would also recommend using [CSP](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to add further defense-in-depth
-restrictions to what you allow the resulting content to do. The Firefox integration of
-reader mode uses both of these techniques itself. Sanitizing unsafe content out of the input is explicitly not something we aim to do as part of Readability itself - there are other good sanitizer libraries out there, use them!
+### Check Readability
+
+```rust
+use readability::is_probably_readerable;
+
+let html = "<html><body><p>Short content</p></body></html>";
+if is_probably_readerable(html, None) {
+    println!("Document appears to be readerable");
+} else {
+    println!("Document may not have enough content");
+}
+```
+
+## CLI Usage
+
+### Basic Usage
+
+```bash
+# Read from file and output JSON
+readability -i article.html
+
+# Read from stdin
+curl https://example.com/article | readability
+
+# Output as plain text
+readability -i article.html -f text
+
+# Output as clean HTML
+readability -i article.html -f html -o clean.html
+```
+
+### CLI Options
+
+```bash
+readability [OPTIONS]
+
+Options:
+  -i, --input <FILE>              Input HTML file (use '-' for stdin)
+  -o, --output <FILE>             Output file (default: stdout)
+  -f, --format <FORMAT>           Output format: json, text, html [default: json]
+  -b, --base-uri <URI>            Base URI for resolving relative URLs
+  -d, --debug                     Enable debug output
+  -c, --check                     Only check if document is readable (exit code 0=readable, 1=not readable)
+      --min-content-length <LENGTH> Minimum content length for readability check [default: 140]
+      --char-threshold <CHARS>    Minimum character threshold for article content [default: 500]
+      --keep-classes              Keep CSS classes in output
+      --disable-json-ld           Disable JSON-LD parsing for metadata
+  -h, --help                      Print help
+  -V, --version                   Print version
+```
+
+### Examples
+
+```bash
+# Check if a document is readerable
+readability -c -i questionable.html
+echo $?  # 0 if readable, 1 if not
+
+# Extract with debugging enabled
+readability -d -i article.html -f text
+
+# Process with base URI for relative links
+readability -b "https://example.com/" -i article.html -f html
+
+# Keep CSS classes in output
+readability --keep-classes -i styled-article.html -f html
+
+# Batch processing
+find articles/ -name "*.html" -exec readability -i {} -f text \;
+```
+
+## API Reference
+
+### `Readability`
+
+The main parser struct for extracting content.
+
+#### Methods
+
+- `new(html: &str, options: Option<ReadabilityOptions>) -> Result<Self, ReadabilityError>`
+- `new_with_base_uri(html: &str, base_uri: &str, options: Option<ReadabilityOptions>) -> Result<Self, ReadabilityError>`
+- `parse(&mut self) -> Option<Article>`
+
+### `ReadabilityOptions`
+
+Configuration options for the parser.
+
+```rust
+pub struct ReadabilityOptions {
+    pub debug: bool,                        // Enable debug logging
+    pub max_elems_to_parse: usize,         // Maximum elements to parse (0 = no limit)
+    pub nb_top_candidates: usize,          // Number of top candidates to consider
+    pub char_threshold: usize,             // Minimum character threshold
+    pub classes_to_preserve: Vec<String>,  // CSS classes to preserve
+    pub keep_classes: bool,                // Whether to keep CSS classes
+    pub disable_json_ld: bool,             // Disable JSON-LD parsing
+    pub allowed_video_regex: Option<Regex>, // Custom video URL regex
+    pub link_density_modifier: f64,        // Link density modifier
+}
+```
+
+### `Article`
+
+The extracted article content and metadata.
+
+```rust
+pub struct Article {
+    pub title: Option<String>,           // Article title
+    pub content: Option<String>,         // HTML content
+    pub text_content: Option<String>,    // Plain text content
+    pub length: Option<usize>,           // Content length in characters
+    pub excerpt: Option<String>,         // Article excerpt/description
+    pub byline: Option<String>,          // Author information
+    pub dir: Option<String>,             // Content direction (ltr/rtl)
+    pub site_name: Option<String>,       // Site name
+    pub lang: Option<String>,            // Content language
+    pub published_time: Option<String>,  // Published time
+}
+```
+
+### Functions
+
+- `is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -> bool`
+
+## Performance
+
+This Rust implementation offers several performance advantages:
+
+- **Memory Safety**: No risk of memory leaks or buffer overflows
+- **Zero-Cost Abstractions**: Rust's design ensures minimal runtime overhead
+- **Parallel Processing**: Safe concurrency for batch processing
+- **Native Speed**: Compiled to native machine code
+
+## Comparison with Original
+
+This implementation aims to provide the same functionality as Mozilla's JavaScript Readability library while offering:
+
+- Better performance through native compilation
+- Memory safety guarantees
+- Strong typing
+- Easy integration with Rust projects
+- Command-line interface for scripting
 
 ## Contributing
 
-Please see our [Contributing](CONTRIBUTING.md) document.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+### Development
+
+```bash
+# Clone the repository
+git clone https://github.com/mozilla/readability-rust
+cd readability-rust
+
+# Run tests
+cargo test
+
+# Run with debug logging
+RUST_LOG=debug cargo run -- -d -i example.html
+
+# Build release version
+cargo build --release
+```
+
+### Testing
+
+The project includes comprehensive tests:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with coverage
+cargo test --coverage
+
+# Run specific test module
+cargo test regexps
+```
 
 ## License
 
-    Copyright (c) 2010 Arc90 Inc
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+This is a port of Mozilla's Readability library, which is also licensed under Apache 2.0.
 
-       http://www.apache.org/licenses/LICENSE-2.0
+## Acknowledgments
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+- [Mozilla Readability](https://github.com/mozilla/readability) - The original JavaScript implementation
+- [Arc90 Readability](http://code.google.com/p/arc90labs-readability) - The original algorithm
+- The Rust community for excellent HTML parsing libraries
+
+## Related Projects
+
+- [readability-cli](https://www.npmjs.com/package/readability-cli) - Node.js CLI for the original library
+- [python-readability](https://github.com/buriy/python-readability) - Python port
+- [go-readability](https://github.com/go-shiori/go-readability) - Go port
