@@ -1,0 +1,18 @@
+/workspace/target/debug/deps/selectors-a1de1e081c81de7c.d: /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/lib.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/attr.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/bloom.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/builder.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/context.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/matching.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/nth_index_cache.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/parser.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/sink.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/tree.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/visitor.rs /workspace/target/debug/build/selectors-5324d1b842e035de/out/ascii_case_insensitive_html_attributes.rs
+
+/workspace/target/debug/deps/libselectors-a1de1e081c81de7c.rmeta: /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/lib.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/attr.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/bloom.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/builder.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/context.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/matching.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/nth_index_cache.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/parser.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/sink.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/tree.rs /home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/visitor.rs /workspace/target/debug/build/selectors-5324d1b842e035de/out/ascii_case_insensitive_html_attributes.rs
+
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/lib.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/attr.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/bloom.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/builder.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/context.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/matching.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/nth_index_cache.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/parser.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/sink.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/tree.rs:
+/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/selectors-0.25.0/visitor.rs:
+/workspace/target/debug/build/selectors-5324d1b842e035de/out/ascii_case_insensitive_html_attributes.rs:
+
+# env-dep:OUT_DIR=/workspace/target/debug/build/selectors-5324d1b842e035de/out

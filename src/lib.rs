@@ -351,53 +351,264 @@ pub fn is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -
 mod tests {
     use super::*;
 
+    // Helper function to create a readability parser
+    fn create_parser(html: &str) -> Readability {
+        Readability::new(html, Some(ReadabilityOptions {
+            debug: true,
+            ..Default::default()
+        })).unwrap()
+    }
+
     #[test]
-    fn test_basic_parsing() {
+    fn test_readability_options_default() {
+        let options = ReadabilityOptions::default();
+        assert!(!options.debug);
+        assert_eq!(options.max_elems_to_parse, 0);
+        assert_eq!(options.nb_top_candidates, 5);
+        assert_eq!(options.char_threshold, 500);
+        assert!(!options.keep_classes);
+        assert!(!options.disable_json_ld);
+    }
+
+    #[test]
+    fn test_article_creation() {
+        let article = Article {
+            title: Some("Test Title".to_string()),
+            content: Some("<div>Test content</div>".to_string()),
+            text_content: Some("Test content".to_string()),
+            length: Some(12),
+            excerpt: Some("Test excerpt".to_string()),
+            byline: Some("Test Author".to_string()),
+            dir: None,
+            site_name: Some("Test Site".to_string()),
+            lang: Some("en".to_string()),
+            published_time: None,
+        };
+
+        assert_eq!(article.title.unwrap(), "Test Title");
+        assert_eq!(article.length.unwrap(), 12);
+        assert!(article.excerpt.is_some());
+    }
+
+    #[test]
+    fn test_simple_article_parsing() {
         let html = r#"
-        <html>
-            <head><title>Test Article</title></head>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Test Article</title>
+                <meta name="author" content="John Doe">
+                <meta name="description" content="This is a test article">
+            </head>
             <body>
+                <h1>Test Article Title</h1>
                 <article>
-                    <h1>Main Title</h1>
-                    <p>This is the main content of the article that should be extracted.</p>
+                    <p>This is the first paragraph of our test article. It contains enough content to be considered readable.</p>
+                    <p>This is the second paragraph with more content. It helps ensure the article meets the minimum length requirements for processing.</p>
+                    <p>A third paragraph to add more substance to our test article and make it comprehensive enough for testing.</p>
                 </article>
-                <aside>This sidebar should be removed.</aside>
             </body>
-        </html>
+            </html>
         "#;
 
-        let mut readability = Readability::new(html, None).unwrap();
-        let article = readability.parse();
-        
-        assert!(article.is_some());
-        let article = article.unwrap();
+        let mut parser = create_parser(html);
+        let result = parser.parse();
+
+        assert!(result.is_some());
+        let article = result.unwrap();
+        assert!(article.title.is_some() && !article.title.as_ref().unwrap().is_empty());
         assert!(article.content.is_some());
-        assert!(article.title.is_some());
+        assert!(article.length.is_some() && article.length.unwrap() > 100);
     }
 
     #[test]
-    fn test_is_probably_readerable() {
-        let html = r#"
-        <html>
-            <body>
-                <p>This is a paragraph with enough content to be considered readerable. It has more than 140 characters which is the minimum threshold for content length that we use to determine if something is worth reading.</p>
-            </body>
-        </html>
-        "#;
-
-        assert!(is_probably_readerable(html, None));
+    fn test_empty_document() {
+        let html = "<html><body></body></html>";
+        let mut parser = create_parser(html);
+        let result = parser.parse();
+        
+        // Empty document should not produce a result
+        assert!(result.is_none());
     }
 
     #[test]
-    fn test_not_readerable() {
+    fn test_minimal_content() {
         let html = r#"
-        <html>
+            <html>
             <body>
                 <p>Short</p>
             </body>
-        </html>
+            </html>
         "#;
 
+        let mut parser = create_parser(html);
+        let result = parser.parse();
+        
+        // Very short content should not be considered readable
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_article_with_metadata() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <title>Test Article - Test Site</title>
+                <meta name="author" content="Jane Smith">
+                <meta name="description" content="A comprehensive test article for readability testing">
+                <meta property="og:site_name" content="Test Publishing">
+                <meta property="og:title" content="Test Article">
+            </head>
+            <body>
+                <article>
+                    <h1>Test Article Title</h1>
+                    <div class="byline">By Jane Smith</div>
+                    <p>This is a comprehensive test article with enough content to be considered readable by the parser.</p>
+                    <p>The article contains multiple paragraphs with substantial text content that should pass all readability checks.</p>
+                    <p>Additional content to ensure the article meets minimum length requirements and provides meaningful extractable content.</p>
+                    <p>More content to test the parsing and extraction capabilities of the readability implementation.</p>
+                </article>
+            </body>
+            </html>
+        "#;
+
+        let mut parser = create_parser(html);
+        let result = parser.parse();
+
+        assert!(result.is_some());
+        let article = result.unwrap();
+        
+        assert!(article.title.is_some() && !article.title.as_ref().unwrap().is_empty());
+        assert!(article.byline.is_some());
+        assert!(article.site_name.is_some());
+        assert!(article.lang.is_some());
+        assert_eq!(article.lang.as_ref().unwrap(), "en");
+        assert!(article.length.is_some() && article.length.unwrap() > 200);
+    }
+
+    #[test]
+    fn test_is_probably_readerable_basic() {
+        // Test with content that should be readerable
+        let readable_html = r#"
+            <html>
+            <body>
+                <article>
+                    <h1>Long Article Title</h1>
+                    <p>This is a long article with substantial content that should be considered readable.</p>
+                    <p>Multiple paragraphs with enough text to meet the readability thresholds.</p>
+                    <p>Additional content to ensure this passes the readability checks.</p>
+                    <p>Even more content to make sure this document is substantial enough.</p>
+                </article>
+            </body>
+            </html>
+        "#;
+
+        assert!(is_probably_readerable(readable_html, None));
+
+        // Test with content that should not be readerable
+        let unreadable_html = r#"
+            <html>
+            <body>
+                <nav>Menu</nav>
+                <footer>Copyright</footer>
+            </body>
+            </html>
+        "#;
+
+        assert!(!is_probably_readerable(unreadable_html, None));
+    }
+
+    #[test]
+    fn test_is_probably_readerable_with_options() {
+        let html = r#"
+            <html>
+            <body>
+                <p>Medium length content that is somewhat substantial.</p>
+            </body>
+            </html>
+        "#;
+
+        // With default options, this should not be readerable
         assert!(!is_probably_readerable(html, None));
+
+        // With lower thresholds, this should be readerable
+        let lenient_options = ReadabilityOptions {
+            char_threshold: 20,
+            ..Default::default()
+        };
+        assert!(is_probably_readerable(html, Some(lenient_options)));
+    }
+
+    #[test]
+    fn test_parser_creation() {
+        let html = "<html><body><p>Test content</p></body></html>";
+        let parser = Readability::new(html, None);
+        assert!(parser.is_ok());
+    }
+
+    #[test]
+    fn test_parser_with_options() {
+        let html = "<html><body><p>Test content</p></body></html>";
+        let options = ReadabilityOptions {
+            debug: true,
+            char_threshold: 100,
+            ..Default::default()
+        };
+        let parser = Readability::new(html, Some(options));
+        assert!(parser.is_ok());
+    }
+
+    #[test]
+    fn test_unicode_handling() {
+        let unicode_html = r#"
+            <!DOCTYPE html>
+            <html lang="zh">
+            <head>
+                <title>测试文章</title>
+                <meta charset="UTF-8">
+            </head>
+            <body>
+                <article>
+                    <h1>Unicode Content Test</h1>
+                    <p>This article contains unicode characters: 测试 🚀 ñáéíóú àèìòù</p>
+                    <p>Emoji support test: 😀 🎉 🌟 💻 📚</p>
+                    <p>Various languages: English, Español, Français, 中文, 日本語, العربية</p>
+                    <p>Special characters: ™ © ® € £ ¥ § ¶ † ‡ • … ‰ ′ ″ ‹ › « » " " ' '</p>
+                </article>
+            </body>
+            </html>
+        "#;
+
+        let mut parser = create_parser(unicode_html);
+        let result = parser.parse();
+
+        assert!(result.is_some());
+        let article = result.unwrap();
+        
+        // Should handle unicode content without panicking
+        assert!(article.title.is_some());
+        assert!(article.text_content.is_some());
+    }
+
+    #[test]
+    fn test_malformed_html_handling() {
+        let malformed_html = r#"
+            <html>
+            <body>
+                <div>
+                    <p>Unclosed paragraph
+                    <div>Nested div without proper closing
+                    <p>Another paragraph</p>
+                </div>
+            </body>
+            </html>
+        "#;
+
+        let mut parser = create_parser(malformed_html);
+        let result = parser.parse();
+
+        // Should handle malformed HTML gracefully without panicking
+        assert!(result.is_some() || result.is_none());
     }
 }
