@@ -1,10 +1,22 @@
-.DS_Store
-npm-debug.log
-node_modules
-.metadata
-*.pyc
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
 *~
-.*.sw?
-.sw?
-*.jar
-*.xpi
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local

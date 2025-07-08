@@ -1,129 +1,251 @@
-# Readability.js
+# Readability-rs
 
-A standalone version of the readability library used for [Firefox Reader View](https://support.mozilla.org/kb/firefox-reader-view-clutter-free-web-pages).
+A Rust port of [Mozilla's Readability.js](https://github.com/mozilla/readability) library for extracting readable content from web pages.
+
+This library provides functionality to parse HTML documents and extract the main article content, removing navigation, ads, and other clutter to present clean, readable text.
+
+## Features
+
+- **Content Extraction**: Identifies and extracts the main article content from web pages
+- **Metadata Parsing**: Extracts titles, authors, publication dates, and other metadata
+- **Content Scoring**: Uses Mozilla's proven algorithms to score and rank content elements
+- **Readability Assessment**: Determines if a page is likely to contain readable content
+- **CLI Tool**: Command-line interface for processing HTML files and URLs
+- **Multiple Output Formats**: JSON, plain text, and cleaned HTML output
+- **Unicode Support**: Handles international text, emojis, and special characters
+- **Error Handling**: Graceful handling of malformed HTML and edge cases
 
 ## Installation
 
-Readability is available on npm:
+Add this to your `Cargo.toml`:
 
-```bash
-npm install @mozilla/readability
+```toml
+[dependencies]
+readability = "0.1.0"
 ```
 
-You can then `require()` it, or for web-based projects, load the `Readability.js` script from your webpage.
+## Library Usage
 
-## Basic usage
+### Basic Article Extraction
 
-To parse a document, you must create a new `Readability` object from a DOM document object, and then call the [`parse()`](#parse) method. Here's an example:
+```rust
+use readability::{Readability, ReadabilityOptions};
 
-```javascript
-var article = new Readability(document).parse();
-```
+let html = r#"
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Sample Article</title>
+        <meta name="author" content="John Doe">
+    </head>
+    <body>
+        <article>
+            <h1>Article Title</h1>
+            <p>This is the main content of the article...</p>
+            <p>More substantial content here...</p>
+        </article>
+        <aside>Sidebar content to be removed</aside>
+    </body>
+    </html>
+"#;
 
-If you use Readability in a web browser, you will likely be able to use a `document` reference from elsewhere (e.g. fetched via XMLHttpRequest, in a same-origin `<iframe>` you have access to, etc.). In Node.js, you can [use an external DOM library](#nodejs-usage).
-
-## API Reference
-
-### `new Readability(document, options)`
-
-The `options` object accepts a number of properties, all optional:
-
-* `debug` (boolean, default `false`): whether to enable logging.
-* `maxElemsToParse` (number, default `0` i.e. no limit): the maximum number of elements to parse.
-* `nbTopCandidates` (number, default `5`): the number of top candidates to consider when analysing how tight the competition is among candidates.
-* `charThreshold` (number, default `500`): the number of characters an article must have in order to return a result.
-* `classesToPreserve` (array): a set of classes to preserve on HTML elements when the `keepClasses` options is set to `false`.
-* `keepClasses` (boolean, default `false`): whether to preserve all classes on HTML elements. When set to `false` only classes specified in the `classesToPreserve` array are kept.
-* `disableJSONLD` (boolean, default `false`): when extracting page metadata, Readability gives precedence to Schema.org fields specified in the JSON-LD format. Set this option to `true` to skip JSON-LD parsing.
-* `serializer` (function, default `el => el.innerHTML`) controls how the `content` property returned by the `parse()` method is produced from the root DOM element. It may be useful to specify the `serializer` as the identity function (`el => el`) to obtain a DOM element instead of a string for `content` if you plan to process it further.
-* `allowedVideoRegex` (RegExp, default `undefined` ): a regular expression that matches video URLs that should be allowed to be included in the article content. If `undefined`, the [default regex](https://github.com/mozilla/readability/blob/8e8ec27cd2013940bc6f3cc609de10e35a1d9d86/Readability.js#L133) is applied.
-* `linkDensityModifier` (number, default `0`): a number that is added to the base link density threshold during the shadiness checks. This can be used to penalize nodes with a high link density or vice versa.
-
-### `parse()`
-
-Returns an object containing the following properties:
-
-* `title`: article title;
-* `content`: HTML string of processed article content;
-* `textContent`: text content of the article, with all the HTML tags removed;
-* `length`: length of an article, in characters;
-* `excerpt`: article description, or short excerpt from the content;
-* `byline`: author metadata;
-* `dir`: content direction;
-* `siteName`: name of the site;
-* `lang`: content language;
-* `publishedTime`: published time;
-
-The `parse()` method works by modifying the DOM. This removes some elements in the web page, which may be undesirable. You can avoid this by passing the clone of the `document` object to the `Readability` constructor:
-
-```js
-var documentClone = document.cloneNode(true);
-var article = new Readability(documentClone).parse();
-```
-
-### `isProbablyReaderable(document, options)`
-
-A quick-and-dirty way of figuring out if it's plausible that the contents of a given document are suitable for processing with Readability. It is likely to produce both false positives and false negatives. The reason it exists is to avoid bogging down a time-sensitive process (like loading and showing the user a webpage) with the complex logic in the core of Readability. Improvements to its logic (while not deteriorating its performance) are very welcome.
-
-The `options` object accepts a number of properties, all optional:
-
-* `minContentLength` (number, default `140`): the minimum node content length used to decide if the document is readerable;
-* `minScore` (number, default `20`): the minimum cumulated 'score' used to determine if the document is readerable;
-* `visibilityChecker` (function, default `isNodeVisible`): the function used to determine if a node is visible;
-
-The function returns a boolean corresponding to whether or not we suspect `Readability.parse()` will succeed at returning an article object. Here's an example:
-
-```js
-/*
-    Only instantiate Readability  if we suspect
-    the `parse()` method will produce a meaningful result.
-*/
-if (isProbablyReaderable(document)) {
-    let article = new Readability(document).parse();
+let mut parser = Readability::new(html, None).unwrap();
+if let Some(article) = parser.parse() {
+    println!("Title: {:?}", article.title);
+    println!("Author: {:?}", article.byline);
+    println!("Content: {:?}", article.content);
+    println!("Text Length: {:?}", article.length);
 }
 ```
 
-## Node.js usage
+### Custom Configuration
 
-Since Node.js does not come with its own DOM implementation, we rely on external libraries like [jsdom](https://github.com/jsdom/jsdom). Here's an example using `jsdom` to obtain a DOM document object:
+```rust
+use readability::{Readability, ReadabilityOptions};
 
-```js
-var { Readability } = require('@mozilla/readability');
-var { JSDOM } = require('jsdom');
-var doc = new JSDOM("<body>Look at this cat: <img src='./cat.jpg'></body>", {
-  url: "https://www.example.com/the-page-i-got-the-source-from"
-});
-let reader = new Readability(doc.window.document);
-let article = reader.parse();
+let options = ReadabilityOptions {
+    debug: true,
+    char_threshold: 250,
+    keep_classes: true,
+    ..Default::default()
+};
+
+let mut parser = Readability::new(html, Some(options)).unwrap();
+let article = parser.parse();
 ```
 
-Remember to pass the page's URI as the `url` option in the `JSDOM` constructor (as shown in the example above), so that Readability can convert relative URLs for images, hyperlinks, etc. to their absolute counterparts.
+### Readability Assessment
 
-`jsdom` has the ability to run the scripts included in the HTML and fetch remote resources. For security reasons these are [disabled by default](https://github.com/jsdom/jsdom#executing-scripts), and we **strongly** recommend you keep them that way.
+```rust
+use readability::is_probably_readerable;
 
-## Security
+let html = "<html><body><p>Short content</p></body></html>";
 
-If you're going to use Readability with untrusted input (whether in HTML or DOM form), we **strongly** recommend you use a sanitizer library like [DOMPurify](https://github.com/cure53/DOMPurify) to avoid script injection when you use
-the output of Readability. We would also recommend using [CSP](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to add further defense-in-depth
-restrictions to what you allow the resulting content to do. The Firefox integration of
-reader mode uses both of these techniques itself. Sanitizing unsafe content out of the input is explicitly not something we aim to do as part of Readability itself - there are other good sanitizer libraries out there, use them!
+if is_probably_readerable(html, None) {
+    println!("This page likely contains readable content");
+} else {
+    println!("This page may not have substantial content");
+}
+```
+
+## CLI Usage
+
+The library includes a command-line tool for processing HTML files:
+
+### Installation
+
+```bash
+cargo install readability
+```
+
+### Basic Usage
+
+```bash
+# Process a local HTML file
+readability -i article.html
+
+# Process from stdin
+cat article.html | readability
+
+# Output as JSON
+readability -i article.html -f json
+
+# Output as plain text
+readability -i article.html -f text
+
+# Check if content is readable
+readability -i article.html --check
+
+# Debug mode with verbose output
+readability -i article.html --debug
+```
+
+### CLI Options
+
+```
+Usage: readability [OPTIONS]
+
+Options:
+  -i, --input <FILE>              Input HTML file (use '-' for stdin)
+  -o, --output <FILE>             Output file (default: stdout)
+  -f, --format <FORMAT>           Output format [default: json] [possible values: json, text, html]
+      --base-uri <URI>            Base URI for resolving relative URLs
+      --debug                     Enable debug output
+      --check                     Only check if content is readable
+      --char-threshold <N>        Minimum character threshold [default: 500]
+      --keep-classes              Keep CSS classes in output
+      --disable-json-ld           Disable JSON-LD parsing
+  -h, --help                      Print help
+  -V, --version                   Print version
+```
+
+## API Reference
+
+### Core Types
+
+#### `Readability`
+The main parser struct for extracting content from HTML documents.
+
+#### `ReadabilityOptions`
+Configuration options for customizing parsing behavior:
+- `debug`: Enable debug logging
+- `char_threshold`: Minimum character count for content
+- `keep_classes`: Preserve CSS classes in output
+- `disable_json_ld`: Skip JSON-LD metadata parsing
+
+#### `Article`
+Represents extracted article content:
+- `title`: Article title
+- `content`: Cleaned HTML content
+- `text_content`: Plain text content
+- `length`: Content length in characters
+- `byline`: Author information
+- `excerpt`: Article excerpt/description
+- `site_name`: Site name
+- `lang`: Content language
+- `published_time`: Publication date
+
+### Functions
+
+#### `is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -> bool`
+Determines if an HTML document likely contains readable content.
+
+## Algorithm
+
+This implementation follows Mozilla's Readability.js algorithm:
+
+1. **Preprocessing**: Remove script tags and prepare the document
+2. **Content Discovery**: Identify potential content-bearing elements
+3. **Scoring**: Score elements based on various factors:
+   - Element types (article, p, div, etc.)
+   - Class names and IDs
+   - Text length and density
+   - Link density
+4. **Candidate Selection**: Choose the best content candidates
+5. **Content Extraction**: Extract and clean the selected content
+6. **Post-processing**: Final cleanup and formatting
+
+## Testing
+
+The library includes comprehensive tests covering:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific test categories
+cargo test test_article_parsing
+cargo test test_metadata_extraction
+cargo test test_readability_assessment
+```
+
+## Mozilla Readability Reference
+
+This project includes the original Mozilla Readability.js library as a submodule for reference:
+
+```bash
+# Initialize the submodule
+git submodule update --init --recursive
+
+# View the original JavaScript implementation
+ls mozilla-readability/
+```
+
+The original implementation can be found at: https://github.com/mozilla/readability
+
+## Performance
+
+The Rust implementation provides significant performance benefits:
+- **Memory Safety**: No runtime memory errors
+- **Zero-cost Abstractions**: Compile-time optimizations
+- **Concurrent Processing**: Safe parallel processing capabilities
+- **Small Binary Size**: Minimal runtime dependencies
 
 ## Contributing
 
-Please see our [Contributing](CONTRIBUTING.md) document.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+### Development Setup
+
+```bash
+git clone https://github.com/your-username/readability-rs.git
+cd readability-rs
+git submodule update --init --recursive
+cargo build
+cargo test
+```
 
 ## License
 
-    Copyright (c) 2010 Arc90 Inc
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+The original Mozilla Readability.js library is also licensed under Apache License 2.0.
 
-       http://www.apache.org/licenses/LICENSE-2.0
+## Acknowledgments
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+- [Mozilla Readability.js](https://github.com/mozilla/readability) - The original JavaScript implementation
+- [Arc90's Readability](https://web.archive.org/web/20130627094911/https://www.readability.com/) - The original inspiration
+- The Rust community for excellent crates and tooling
