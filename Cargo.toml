@@ -13,6 +13,10 @@ categories = ["parser-implementations", "text-processing", "web-programming"]
 name = "readability"
 path = "src/main.rs"
 
+[[bin]]
+name = "generate_testcase"
+path = "src/bin/generate_testcase.rs"
+
 [lib]
 name = "readability"
 path = "src/lib.rs"
