@@ -1,7 +1,9 @@
 //! # Readability
 //!
-//! A Rust port of Mozilla's Readability library for extracting article content from web pages.
-//! This library removes clutter like ads, navigation, and sidebars to extract the main content.
+//! A Rust port of Mozilla's Readability.js library for extracting readable content from web pages.
+//!
+//! This library provides functionality to parse HTML documents and extract the main article content,
+//! removing navigation, ads, and other clutter to present clean, readable text.
 //!
 //! ## Example
 //!
@@ -9,22 +11,20 @@
 //! use readability::{Readability, ReadabilityOptions};
 //!
 //! let html = r#"
-//! <html>
-//!   <head><title>Example Article</title></head>
-//!   <body>
-//!     <article>
-//!       <h1>Main Article Title</h1>
-//!       <p>This is the main content of the article...</p>
-//!     </article>
-//!     <aside>This is sidebar content that should be removed.</aside>
-//!   </body>
-//! </html>
+//!     <html>
+//!     <body>
+//!         <article>
+//!             <h1>Article Title</h1>
+//!             <p>This is the main content of the article.</p>
+//!         </article>
+//!     </body>
+//!     </html>
 //! "#;
 //!
-//! let mut readability = Readability::new(html, None).unwrap();
-//! if let Some(article) = readability.parse() {
-//!     println!("Title: {}", article.title.unwrap_or_default());
-//!     println!("Content: {}", article.content.unwrap_or_default());
+//! let mut parser = Readability::new(html, None).unwrap();
+//! if let Some(article) = parser.parse() {
+//!     println!("Title: {:?}", article.title);
+//!     println!("Content: {:?}", article.content);
 //! }
 //! ```
 
@@ -38,9 +38,19 @@ mod regexps;
 mod scoring;
 mod utils;
 
-pub use regexps::*;
-pub use scoring::*;
-pub use utils::*;
+// Re-export specific functions to avoid naming conflicts
+pub use regexps::{
+    is_unlikely_candidate, has_positive_indicators, has_negative_indicators,
+    is_byline, is_video_url, is_whitespace, has_content, contains_ad_words, contains_loading_words
+};
+pub use scoring::ContentScore;
+pub use utils::{
+    to_absolute_uri, is_url, get_inner_text, get_char_count, is_phrasing_content,
+    is_single_image, is_node_visible, has_ancestor_tag, get_node_ancestors,
+    is_element_without_content, has_single_tag_inside_element, has_child_block_element,
+    should_clean_attribute, extract_text_content, word_count, is_title_candidate,
+    unescape_html_entities, clean_text, get_link_density
+};
 
 /// Errors that can occur during readability parsing
 #[derive(Error, Debug)]
@@ -83,16 +93,16 @@ impl Default for ReadabilityOptions {
             max_elems_to_parse: 0,
             nb_top_candidates: 5,
             char_threshold: 500,
-            classes_to_preserve: vec!["page".to_string()],
+            classes_to_preserve: Vec::new(),
             keep_classes: false,
             disable_json_ld: false,
             allowed_video_regex: None,
-            link_density_modifier: 0.0,
+            link_density_modifier: 1.0,
         }
     }
 }
 
-/// Article metadata extracted from the document
+/// Represents an extracted article
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Article {
     /// Article title
@@ -122,19 +132,12 @@ pub struct Readability {
     document: Html,
     options: ReadabilityOptions,
     base_uri: Option<String>,
-    flags: u8,
-    attempts: Vec<String>,
     article_title: Option<String>,
     article_byline: Option<String>,
     article_dir: Option<String>,
     article_site_name: Option<String>,
     metadata: HashMap<String, String>,
 }
-
-// Parser flags
-const FLAG_STRIP_UNLIKELYS: u8 = 0x1;
-const FLAG_WEIGHT_CLASSES: u8 = 0x2;
-const FLAG_CLEAN_CONDITIONALLY: u8 = 0x4;
 
 impl Readability {
     /// Create a new Readability parser from HTML content
@@ -146,8 +149,6 @@ impl Readability {
             document,
             options,
             base_uri: None,
-            flags: FLAG_STRIP_UNLIKELYS | FLAG_WEIGHT_CLASSES | FLAG_CLEAN_CONDITIONALLY,
-            attempts: Vec::new(),
             article_title: None,
             article_byline: None,
             article_dir: None,

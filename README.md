@@ -1,20 +1,21 @@
-# Readability for Rust
+# Readability-rs
 
-A Rust port of [Mozilla's Readability library](https://github.com/mozilla/readability) for extracting article content from web pages. This library removes clutter like ads, navigation, and sidebars to extract the main content, making it perfect for reader mode implementations, content archiving, and text analysis.
+A Rust port of [Mozilla's Readability.js](https://github.com/mozilla/readability) library for extracting readable content from web pages.
+
+This library provides functionality to parse HTML documents and extract the main article content, removing navigation, ads, and other clutter to present clean, readable text.
 
 ## Features
 
-- **Content Extraction**: Automatically identifies and extracts the main article content from web pages
-- **Cleanup**: Removes ads, navigation menus, sidebars, and other non-content elements
-- **Metadata Extraction**: Extracts title, author, published date, and other article metadata
-- **Multiple Output Formats**: Support for JSON, plain text, and clean HTML output
-- **CLI Tool**: Command-line interface for batch processing and shell scripting
-- **Readability Check**: Quick assessment of whether a document is suitable for content extraction
-- **Rust Performance**: Native Rust implementation for speed and memory safety
+- **Content Extraction**: Identifies and extracts the main article content from web pages
+- **Metadata Parsing**: Extracts titles, authors, publication dates, and other metadata
+- **Content Scoring**: Uses Mozilla's proven algorithms to score and rank content elements
+- **Readability Assessment**: Determines if a page is likely to contain readable content
+- **CLI Tool**: Command-line interface for processing HTML files and URLs
+- **Multiple Output Formats**: JSON, plain text, and cleaned HTML output
+- **Unicode Support**: Handles international text, emojis, and special characters
+- **Error Handling**: Graceful handling of malformed HTML and edge cases
 
 ## Installation
-
-### As a Library
 
 Add this to your `Cargo.toml`:
 
@@ -23,273 +24,228 @@ Add this to your `Cargo.toml`:
 readability = "0.1.0"
 ```
 
-### CLI Tool
-
-Install the command-line tool:
-
-```bash
-cargo install readability
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/mozilla/readability-rust
-cd readability-rust
-cargo build --release
-./target/release/readability --help
-```
-
 ## Library Usage
 
-### Basic Example
+### Basic Article Extraction
 
 ```rust
 use readability::{Readability, ReadabilityOptions};
 
 let html = r#"
-<html>
-  <head><title>Example Article</title></head>
-  <body>
-    <nav>Navigation menu...</nav>
-    <article>
-      <h1>Main Article Title</h1>
-      <p>This is the main content of the article that should be extracted.</p>
-      <p>More content here...</p>
-    </article>
-    <aside>Sidebar content that should be removed.</aside>
-  </body>
-</html>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Sample Article</title>
+        <meta name="author" content="John Doe">
+    </head>
+    <body>
+        <article>
+            <h1>Article Title</h1>
+            <p>This is the main content of the article...</p>
+            <p>More substantial content here...</p>
+        </article>
+        <aside>Sidebar content to be removed</aside>
+    </body>
+    </html>
 "#;
 
-let mut readability = Readability::new(html, None).unwrap();
-if let Some(article) = readability.parse() {
-    println!("Title: {}", article.title.unwrap_or_default());
-    println!("Content: {}", article.content.unwrap_or_default());
-    println!("Text: {}", article.text_content.unwrap_or_default());
-    println!("Length: {} characters", article.length.unwrap_or(0));
+let mut parser = Readability::new(html, None).unwrap();
+if let Some(article) = parser.parse() {
+    println!("Title: {:?}", article.title);
+    println!("Author: {:?}", article.byline);
+    println!("Content: {:?}", article.content);
+    println!("Text Length: {:?}", article.length);
 }
 ```
 
-### With Custom Options
+### Custom Configuration
 
 ```rust
 use readability::{Readability, ReadabilityOptions};
 
 let options = ReadabilityOptions {
     debug: true,
-    char_threshold: 300,
+    char_threshold: 250,
     keep_classes: true,
     ..Default::default()
 };
 
-let mut readability = Readability::new(html, Some(options)).unwrap();
-let article = readability.parse().expect("Failed to parse article");
+let mut parser = Readability::new(html, Some(options)).unwrap();
+let article = parser.parse();
 ```
 
-### With Base URI
-
-```rust
-use readability::Readability;
-
-let base_uri = "https://example.com/articles/";
-let mut readability = Readability::new_with_base_uri(html, base_uri, None).unwrap();
-let article = readability.parse().unwrap();
-```
-
-### Check Readability
+### Readability Assessment
 
 ```rust
 use readability::is_probably_readerable;
 
 let html = "<html><body><p>Short content</p></body></html>";
+
 if is_probably_readerable(html, None) {
-    println!("Document appears to be readerable");
+    println!("This page likely contains readable content");
 } else {
-    println!("Document may not have enough content");
+    println!("This page may not have substantial content");
 }
 ```
 
 ## CLI Usage
 
+The library includes a command-line tool for processing HTML files:
+
+### Installation
+
+```bash
+cargo install readability
+```
+
 ### Basic Usage
 
 ```bash
-# Read from file and output JSON
+# Process a local HTML file
 readability -i article.html
 
-# Read from stdin
-curl https://example.com/article | readability
+# Process from stdin
+cat article.html | readability
+
+# Output as JSON
+readability -i article.html -f json
 
 # Output as plain text
 readability -i article.html -f text
 
-# Output as clean HTML
-readability -i article.html -f html -o clean.html
+# Check if content is readable
+readability -i article.html --check
+
+# Debug mode with verbose output
+readability -i article.html --debug
 ```
 
 ### CLI Options
 
-```bash
-readability [OPTIONS]
+```
+Usage: readability [OPTIONS]
 
 Options:
   -i, --input <FILE>              Input HTML file (use '-' for stdin)
   -o, --output <FILE>             Output file (default: stdout)
-  -f, --format <FORMAT>           Output format: json, text, html [default: json]
-  -b, --base-uri <URI>            Base URI for resolving relative URLs
-  -d, --debug                     Enable debug output
-  -c, --check                     Only check if document is readable (exit code 0=readable, 1=not readable)
-      --min-content-length <LENGTH> Minimum content length for readability check [default: 140]
-      --char-threshold <CHARS>    Minimum character threshold for article content [default: 500]
+  -f, --format <FORMAT>           Output format [default: json] [possible values: json, text, html]
+      --base-uri <URI>            Base URI for resolving relative URLs
+      --debug                     Enable debug output
+      --check                     Only check if content is readable
+      --char-threshold <N>        Minimum character threshold [default: 500]
       --keep-classes              Keep CSS classes in output
-      --disable-json-ld           Disable JSON-LD parsing for metadata
+      --disable-json-ld           Disable JSON-LD parsing
   -h, --help                      Print help
   -V, --version                   Print version
 ```
 
-### Examples
-
-```bash
-# Check if a document is readerable
-readability -c -i questionable.html
-echo $?  # 0 if readable, 1 if not
-
-# Extract with debugging enabled
-readability -d -i article.html -f text
-
-# Process with base URI for relative links
-readability -b "https://example.com/" -i article.html -f html
-
-# Keep CSS classes in output
-readability --keep-classes -i styled-article.html -f html
-
-# Batch processing
-find articles/ -name "*.html" -exec readability -i {} -f text \;
-```
-
 ## API Reference
 
-### `Readability`
+### Core Types
 
-The main parser struct for extracting content.
+#### `Readability`
+The main parser struct for extracting content from HTML documents.
 
-#### Methods
+#### `ReadabilityOptions`
+Configuration options for customizing parsing behavior:
+- `debug`: Enable debug logging
+- `char_threshold`: Minimum character count for content
+- `keep_classes`: Preserve CSS classes in output
+- `disable_json_ld`: Skip JSON-LD metadata parsing
 
-- `new(html: &str, options: Option<ReadabilityOptions>) -> Result<Self, ReadabilityError>`
-- `new_with_base_uri(html: &str, base_uri: &str, options: Option<ReadabilityOptions>) -> Result<Self, ReadabilityError>`
-- `parse(&mut self) -> Option<Article>`
-
-### `ReadabilityOptions`
-
-Configuration options for the parser.
-
-```rust
-pub struct ReadabilityOptions {
-    pub debug: bool,                        // Enable debug logging
-    pub max_elems_to_parse: usize,         // Maximum elements to parse (0 = no limit)
-    pub nb_top_candidates: usize,          // Number of top candidates to consider
-    pub char_threshold: usize,             // Minimum character threshold
-    pub classes_to_preserve: Vec<String>,  // CSS classes to preserve
-    pub keep_classes: bool,                // Whether to keep CSS classes
-    pub disable_json_ld: bool,             // Disable JSON-LD parsing
-    pub allowed_video_regex: Option<Regex>, // Custom video URL regex
-    pub link_density_modifier: f64,        // Link density modifier
-}
-```
-
-### `Article`
-
-The extracted article content and metadata.
-
-```rust
-pub struct Article {
-    pub title: Option<String>,           // Article title
-    pub content: Option<String>,         // HTML content
-    pub text_content: Option<String>,    // Plain text content
-    pub length: Option<usize>,           // Content length in characters
-    pub excerpt: Option<String>,         // Article excerpt/description
-    pub byline: Option<String>,          // Author information
-    pub dir: Option<String>,             // Content direction (ltr/rtl)
-    pub site_name: Option<String>,       // Site name
-    pub lang: Option<String>,            // Content language
-    pub published_time: Option<String>,  // Published time
-}
-```
+#### `Article`
+Represents extracted article content:
+- `title`: Article title
+- `content`: Cleaned HTML content
+- `text_content`: Plain text content
+- `length`: Content length in characters
+- `byline`: Author information
+- `excerpt`: Article excerpt/description
+- `site_name`: Site name
+- `lang`: Content language
+- `published_time`: Publication date
 
 ### Functions
 
-- `is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -> bool`
+#### `is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -> bool`
+Determines if an HTML document likely contains readable content.
 
-## Performance
+## Algorithm
 
-This Rust implementation offers several performance advantages:
+This implementation follows Mozilla's Readability.js algorithm:
 
-- **Memory Safety**: No risk of memory leaks or buffer overflows
-- **Zero-Cost Abstractions**: Rust's design ensures minimal runtime overhead
-- **Parallel Processing**: Safe concurrency for batch processing
-- **Native Speed**: Compiled to native machine code
+1. **Preprocessing**: Remove script tags and prepare the document
+2. **Content Discovery**: Identify potential content-bearing elements
+3. **Scoring**: Score elements based on various factors:
+   - Element types (article, p, div, etc.)
+   - Class names and IDs
+   - Text length and density
+   - Link density
+4. **Candidate Selection**: Choose the best content candidates
+5. **Content Extraction**: Extract and clean the selected content
+6. **Post-processing**: Final cleanup and formatting
 
-## Comparison with Original
+## Testing
 
-This implementation aims to provide the same functionality as Mozilla's JavaScript Readability library while offering:
-
-- Better performance through native compilation
-- Memory safety guarantees
-- Strong typing
-- Easy integration with Rust projects
-- Command-line interface for scripting
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Development
-
-```bash
-# Clone the repository
-git clone https://github.com/mozilla/readability-rust
-cd readability-rust
-
-# Run tests
-cargo test
-
-# Run with debug logging
-RUST_LOG=debug cargo run -- -d -i example.html
-
-# Build release version
-cargo build --release
-```
-
-### Testing
-
-The project includes comprehensive tests:
+The library includes comprehensive tests covering:
 
 ```bash
 # Run all tests
 cargo test
 
-# Run with coverage
-cargo test --coverage
+# Run with output
+cargo test -- --nocapture
 
-# Run specific test module
-cargo test regexps
+# Run specific test categories
+cargo test test_article_parsing
+cargo test test_metadata_extraction
+cargo test test_readability_assessment
+```
+
+## Mozilla Readability Reference
+
+This project includes the original Mozilla Readability.js library as a submodule for reference:
+
+```bash
+# Initialize the submodule
+git submodule update --init --recursive
+
+# View the original JavaScript implementation
+ls mozilla-readability/
+```
+
+The original implementation can be found at: https://github.com/mozilla/readability
+
+## Performance
+
+The Rust implementation provides significant performance benefits:
+- **Memory Safety**: No runtime memory errors
+- **Zero-cost Abstractions**: Compile-time optimizations
+- **Concurrent Processing**: Safe parallel processing capabilities
+- **Small Binary Size**: Minimal runtime dependencies
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+### Development Setup
+
+```bash
+git clone https://github.com/your-username/readability-rs.git
+cd readability-rs
+git submodule update --init --recursive
+cargo build
+cargo test
 ```
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-This is a port of Mozilla's Readability library, which is also licensed under Apache 2.0.
+The original Mozilla Readability.js library is also licensed under Apache License 2.0.
 
 ## Acknowledgments
 
-- [Mozilla Readability](https://github.com/mozilla/readability) - The original JavaScript implementation
-- [Arc90 Readability](http://code.google.com/p/arc90labs-readability) - The original algorithm
-- The Rust community for excellent HTML parsing libraries
-
-## Related Projects
-
-- [readability-cli](https://www.npmjs.com/package/readability-cli) - Node.js CLI for the original library
-- [python-readability](https://github.com/buriy/python-readability) - Python port
-- [go-readability](https://github.com/go-shiori/go-readability) - Go port
+- [Mozilla Readability.js](https://github.com/mozilla/readability) - The original JavaScript implementation
+- [Arc90's Readability](https://web.archive.org/web/20130627094911/https://www.readability.com/) - The original inspiration
+- The Rust community for excellent crates and tooling

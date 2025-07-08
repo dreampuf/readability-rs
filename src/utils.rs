@@ -334,7 +334,6 @@ pub fn get_link_density(element: &ElementRef) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use scraper::{Html, Selector};
 
     #[test]
     fn test_normalize_whitespace() {
