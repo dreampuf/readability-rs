@@ -53,7 +53,7 @@ impl ReadabilityRegexps {
             ).unwrap(),
             
             byline: Regex::new(
-                r"(?i)byline|author|dateline|writtenby|p-author"
+                r"(?i)byline|author|dateline|written\s*by|p-author|by\s+\w+"
             ).unwrap(),
             
             replace_fonts: Regex::new(

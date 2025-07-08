@@ -187,6 +187,22 @@ impl Readability {
         let text_content = self.get_inner_text_from_ref(&article_content, true);
         let text_length = text_content.len();
 
+        // Check if content meets minimum requirements
+        if text_length < self.options.char_threshold {
+            if self.options.debug {
+                println!("Content too short: {} chars (minimum: {})", text_length, self.options.char_threshold);
+            }
+            return None;
+        }
+
+        // Check if content is substantive (not just navigation/footer/etc)
+        if !self.is_content_substantial(&text_content) {
+            if self.options.debug {
+                println!("Content not substantial enough");
+            }
+            return None;
+        }
+
         // Post-process would be done here if needed
         if self.options.debug {
             println!("Post-processing content...");
@@ -204,6 +220,30 @@ impl Readability {
             lang: self.metadata.get("lang").cloned(),
             published_time: self.metadata.get("publishedTime").cloned(),
         })
+    }
+
+    /// Check if the extracted content is substantial enough to be considered an article
+    fn is_content_substantial(&self, text_content: &str) -> bool {
+        // Remove excessive whitespace
+        let cleaned_text = text_content.trim();
+        
+        // Check for minimum word count
+        let word_count = cleaned_text.split_whitespace().count();
+        if word_count < 25 {  // Minimum 25 words for substantial content
+            return false;
+        }
+
+        // Check that it's not just navigation text or copyright notices
+        let lowercase_text = cleaned_text.to_lowercase();
+        let nav_indicators = ["copyright", "all rights reserved", "menu", "navigation", "login", "register"];
+        
+        // If the text is primarily navigation content, it's not substantial
+        let nav_word_count: usize = nav_indicators.iter()
+            .map(|indicator| lowercase_text.matches(indicator).count())
+            .sum();
+        
+        // If more than 20% of words are navigation-related, it's not substantial
+        nav_word_count * 5 < word_count
     }
 
     fn remove_scripts(&mut self) {
@@ -226,11 +266,76 @@ impl Readability {
             if let Some(property) = element.value().attr("property") {
                 if let Some(content) = element.value().attr("content") {
                     self.metadata.insert(property.to_string(), content.to_string());
+                    
+                    // Handle specific Open Graph properties
+                    match property {
+                        "og:site_name" => self.article_site_name = Some(content.to_string()),
+                        _ => {}
+                    }
                 }
             }
             if let Some(name) = element.value().attr("name") {
                 if let Some(content) = element.value().attr("content") {
                     self.metadata.insert(name.to_string(), content.to_string());
+                    
+                    // Handle specific meta name properties
+                    match name {
+                        "author" => self.article_byline = Some(content.to_string()),
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Extract byline from DOM elements
+        self.extract_byline_from_dom();
+        
+        // Extract language from html element
+        if let Ok(html_selector) = Selector::parse("html") {
+            if let Some(html_element) = self.document.select(&html_selector).next() {
+                if let Some(lang) = html_element.value().attr("lang") {
+                    self.metadata.insert("lang".to_string(), lang.to_string());
+                }
+            }
+        }
+    }
+
+    fn extract_byline_from_dom(&mut self) {
+        // If we already have a byline from meta tags, use that
+        if self.article_byline.is_some() {
+            return;
+        }
+
+        // Look for byline in common patterns
+        let byline_selectors = [
+            ".byline",
+            ".author",
+            ".post-author", 
+            ".article-author",
+            "[rel=\"author\"]",
+            ".by-author",
+            ".writer",
+        ];
+
+        for selector_str in &byline_selectors {
+            if let Ok(selector) = Selector::parse(selector_str) {
+                if let Some(element) = self.document.select(&selector).next() {
+                    let byline_text = self.get_inner_text_from_ref(&element, false);
+                    let cleaned_byline = byline_text.trim();
+                    
+                    // Clean up common prefixes
+                    let cleaned_byline = cleaned_byline
+                        .strip_prefix("By ")
+                        .or_else(|| cleaned_byline.strip_prefix("by "))
+                        .or_else(|| cleaned_byline.strip_prefix("BY "))
+                        .or_else(|| cleaned_byline.strip_prefix("Author: "))
+                        .or_else(|| cleaned_byline.strip_prefix("Written by "))
+                        .unwrap_or(cleaned_byline);
+
+                    if !cleaned_byline.is_empty() && cleaned_byline.len() < 100 {
+                        self.article_byline = Some(cleaned_byline.to_string());
+                        break;
+                    }
                 }
             }
         }
@@ -306,14 +411,28 @@ impl Readability {
 /// Check if a document is likely to be readable/parseable
 pub fn is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -> bool {
     let document = Html::parse_document(html);
-    let _opts = options.unwrap_or_default();
+    let opts = options.unwrap_or_default();
     
-    let min_score = 20.0;
-    let min_content_length = 140;
+    // Scale minimum score based on char_threshold
+    let min_content_length = if opts.char_threshold > 0 { 
+        opts.char_threshold 
+    } else { 
+        140  // Default fallback
+    };
+    
+    // Scale min_score based on char_threshold - lower thresholds need lower scores
+    let min_score = if min_content_length <= 50 {
+        10.0  // Very lenient for short content
+    } else if min_content_length <= 100 {
+        15.0  // Moderate for medium content
+    } else {
+        20.0  // Standard for longer content
+    };
     
     // Look for content-bearing elements
-    let content_selectors = ["p", "pre", "article"];
+    let content_selectors = ["p", "pre", "article", "div"];
     let mut score = 0.0;
+    let mut total_text_length = 0;
     
     for selector_str in &content_selectors {
         if let Ok(selector) = Selector::parse(selector_str) {
@@ -321,9 +440,11 @@ pub fn is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -
                 let text_content = element.text().collect::<String>();
                 let text_length = text_content.trim().len();
                 
-                if text_length < min_content_length {
+                if text_length < 10 {  // Skip very short elements (reduced from 25)
                     continue;
                 }
+                
+                total_text_length += text_length;
                 
                 // Check for unlikely candidates
                 let class_and_id = format!("{} {}", 
@@ -332,19 +453,40 @@ pub fn is_probably_readerable(html: &str, options: Option<ReadabilityOptions>) -
                 );
                 
                 if is_unlikely_candidate(&class_and_id) {
+                    score -= 5.0;  // Penalize unlikely candidates
                     continue;
                 }
                 
-                score += (text_length as f64 - min_content_length as f64).sqrt();
+                // Score based on element type and content length
+                let element_score = match element.value().name() {
+                    "article" => (text_length as f64 * 0.5).min(30.0),
+                    "p" => (text_length as f64 * 0.3).min(20.0),
+                    "pre" => (text_length as f64 * 0.4).min(25.0),
+                    "div" => {
+                        // More lenient for divs when using low thresholds
+                        if min_content_length <= 50 && text_length > 20 {
+                            (text_length as f64 * 0.25).min(15.0)
+                        } else if text_length > 80 {
+                            (text_length as f64 * 0.2).min(15.0)
+                        } else {
+                            0.0
+                        }
+                    },
+                    _ => 0.0,
+                };
                 
-                if score > min_score {
+                score += element_score;
+                
+                // Early return if we have enough score
+                if score > min_score && total_text_length >= min_content_length {
                     return true;
                 }
             }
         }
     }
     
-    false
+    // Final check: require both minimum score and minimum content length
+    score > min_score && total_text_length >= min_content_length
 }
 
 #[cfg(test)]
@@ -355,6 +497,7 @@ mod tests {
     fn create_parser(html: &str) -> Readability {
         Readability::new(html, Some(ReadabilityOptions {
             debug: true,
+            char_threshold: 250,  // Lower threshold for testing
             ..Default::default()
         })).unwrap()
     }
